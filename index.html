@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pyodide Greeting & Square Demo</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 2em; background: #f7f7fa; }
+    .container { max-width: 400px; margin: auto; background: #fff; padding: 2em; border-radius: 8px; box-shadow: 0 2px 8px #0001; }
+    label, input, button { display: block; width: 100%; margin-bottom: 1em; }
+    .result { margin-top: 1em; font-weight: bold; color: #2a7; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Welcome!</h2>
+    <form id="greet-form">
+      <label for="name">Enter your name:</label>
+      <input type="text" id="name" required autocomplete="off" />
+      <button type="submit">Greet Me</button>
+    </form>
+    <div id="greet-result" class="result"></div>
+
+    <form id="sqrt-form" style="display:none;">
+      <label for="number">Enter a number to get its square:</label>
+      <input type="number" id="number" step="any" required />
+      <button type="submit">Calculate Square</button>
+    </form>
+    <div id="sqrt-result" class="result"></div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/pyodide/v0.23.4/full/pyodide.js"></script>
+  <script>
+    let pyodideReadyPromise = null;
+    let pyodide = null;
+    let mymoduleLoaded = false;
+
+    async function loadPyodideAndModule() {
+      pyodide = await loadPyodide();
+      const resp = await fetch('mymodule.py');
+      const code = await resp.text();
+      pyodide.FS.writeFile('mymodule.py', code);
+      await pyodide.runPythonAsync(`import importlib; m = importlib.import_module('mymodule')`);
+      mymoduleLoaded = true;
+    }
+
+    pyodideReadyPromise = loadPyodideAndModule();
+
+    document.getElementById('greet-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const name = document.getElementById('name').value.trim();
+      if (!name) return;
+      document.getElementById('greet-result').textContent = 'Loading...';
+      await pyodideReadyPromise;
+      // Use greet function from mymodule.py and return value
+      const pyCode = `import mymodule\nresult = mymodule.greet(r'''${name.replaceAll('`', '\`').replaceAll('"', '\"')}''')`;
+      let result = '';
+      try {
+        await pyodide.runPythonAsync(pyCode);
+        result = pyodide.globals.get('result');
+      } catch (err) {
+        result = 'Error: ' + err;
+      }
+      document.getElementById('greet-result').textContent = result;
+      document.getElementById('sqrt-form').style.display = 'block';
+    });
+
+    document.getElementById('sqrt-form').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      const num = document.getElementById('number').value;
+      document.getElementById('sqrt-result').textContent = 'Calculating...';
+      await pyodideReadyPromise;
+      // Use square function from mymodule.py and return value
+      const pyCode = `import mymodule\nresult = mymodule.square(float(${num}))`;
+      let result = '';
+      try {
+        await pyodide.runPythonAsync(pyCode);
+        result = pyodide.globals.get('result');
+      } catch (err) {
+        result = 'Error: ' + err;
+      }
+      document.getElementById('sqrt-result').textContent = `Square: ${result}`;
+    });
+  </script>
+</body>
+</html>
